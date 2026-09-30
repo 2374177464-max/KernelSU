@@ -9,6 +9,30 @@ const BOOTSTRAP_SOURCE: &str = "src/lkm_image_bootstrap.S";
 const BOOTSTRAP_OBJECT: &str = "lkm_image_bootstrap.o";
 const PREPARED_BOOTSTRAP_OBJECT: &str = ".lkm_image_bootstrap.o";
 
+// How many commits this fork adds over upstream. Computed live when the official
+// branch is reachable, otherwise taken from the cached .ksu-fork-offset that
+// scripts/update-fork-offset.sh maintains.
+fn get_fork_offset() -> u32 {
+    if let Ok(output) = Command::new("git")
+        .args(["rev-list", "--count", "upstream/main..HEAD"])
+        .output()
+    {
+        if output.status.success() {
+            if let Ok(text) = String::from_utf8(output.stdout) {
+                if let Ok(offset) = text.trim().parse() {
+                    return offset;
+                }
+            }
+        }
+    }
+    let manifest =
+        PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set"));
+    fs::read_to_string(manifest.join("../../.ksu-fork-offset"))
+        .ok()
+        .and_then(|s| s.trim().parse().ok())
+        .unwrap_or(0)
+}
+
 fn get_git_version() -> Result<(u32, String), std::io::Error> {
     let output = Command::new("git")
         .args(["rev-list", "--count", "HEAD"])
@@ -20,7 +44,7 @@ fn get_git_version() -> Result<(u32, String), std::io::Error> {
         .trim()
         .parse()
         .map_err(|_| std::io::Error::other("Failed to parse git count"))?;
-    let version_code = 30000 - 9 + version_code;
+    let version_code = 30000 - get_fork_offset() + version_code;
 
     let version_name = String::from_utf8(
         Command::new("git")

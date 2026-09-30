@@ -25,9 +25,30 @@ fun getGitDescribe(): String {
     return process.inputStream.bufferedReader().use { it.readText().trim() }
 }
 
+// How many commits this fork adds over upstream. Computed live when the
+// official branch is reachable, otherwise taken from the cached
+// .ksu-fork-offset that scripts/update-fork-offset.sh maintains.
+fun getForkOffset(): Int {
+    val repo = rootDir.parentFile
+    try {
+        val process = ProcessBuilder("git", "rev-list", "--count", "upstream/main..HEAD")
+            .directory(repo)
+            .redirectError(ProcessBuilder.Redirect.DISCARD)
+            .start()
+        val out = process.inputStream.bufferedReader().use { it.readText() }.trim()
+        if (process.waitFor() == 0 && out.isNotEmpty()) return out.toInt()
+    } catch (_: Exception) {
+    }
+    return try {
+        java.io.File(rootDir, "../.ksu-fork-offset").readText().trim().toInt()
+    } catch (_: Exception) {
+        0
+    }
+}
+
 fun getVersionCode(): Int {
     val commitCount = getGitCommitCount()
-    return 30000 - 9 + commitCount
+    return 30000 - getForkOffset() + commitCount
 }
 
 fun getVersionName(): String {

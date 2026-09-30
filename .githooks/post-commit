@@ -1,0 +1,30 @@
+#!/bin/sh
+# Refresh the cached .ksu-fork-offset after each commit.
+#
+# The build systems compute the offset live from git when the official branch is
+# reachable, so this cache only matters where upstream is not available (CI,
+# source tarballs). A post-commit hook is therefore enough: it runs after HEAD
+# is final, which keeps it exact for ordinary commits, amends, rebases and
+# merges alike.
+#
+# Installed by scripts/install-git-hooks.sh.
+
+set -eu
+
+REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+SCRIPT="$REPO_ROOT/scripts/update-fork-offset.sh"
+[ -f "$SCRIPT" ] || exit 0
+
+if sh "$SCRIPT" >/dev/null 2>&1; then
+    NEW=$(cat "$REPO_ROOT/.ksu-fork-offset" 2>/dev/null || echo "")
+    OLD=$(git -C "$REPO_ROOT" show HEAD:.ksu-fork-offset 2>/dev/null || echo "")
+    # Stage only when it changed, so an up-to-date tree stays clean.
+    if [ -n "$NEW" ] && [ "$NEW" != "$OLD" ]; then
+        git -C "$REPO_ROOT" add -- .ksu-fork-offset 2>/dev/null || true
+        echo "ksu: .ksu-fork-offset cache -> $NEW (staged; include it in your next commit)"
+    fi
+else
+    echo "ksu: warning: could not refresh .ksu-fork-offset cache" >&2
+fi
+
+exit 0

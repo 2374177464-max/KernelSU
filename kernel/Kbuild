@@ -114,7 +114,17 @@ endif
 # Calculate version if git version is available
 ifdef KSU_GIT_VERSION_VALID
 # ksu_version: major * 10000 + git version + 200 for historical reasons
-$(eval KSU_VERSION=$(shell expr 30000 - 9 + $(KSU_GIT_VERSION)))
+# KSU_FORK_OFFSET is how many commits this fork adds over upstream. It is
+# computed live when the official branch is reachable, and otherwise taken from
+# the cached .ksu-fork-offset that scripts/update-fork-offset.sh maintains.
+KSU_FORK_OFFSET := $(shell cd $(GIT_ROOT) && $(GIT) rev-list --count upstream/main..HEAD 2>/dev/null)
+ifeq ($(KSU_FORK_OFFSET),)
+KSU_FORK_OFFSET := $(shell cat $(MDIR)../.ksu-fork-offset 2>/dev/null)
+endif
+ifeq ($(KSU_FORK_OFFSET),)
+KSU_FORK_OFFSET := 0
+endif
+$(eval KSU_VERSION=$(shell expr 30000 - $(KSU_FORK_OFFSET) + $(KSU_GIT_VERSION)))
 $(info -- KernelSU version: $(KSU_VERSION))
 ccflags-y += -DKSU_VERSION=$(KSU_VERSION)
 else
